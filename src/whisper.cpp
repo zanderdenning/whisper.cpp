@@ -193,6 +193,7 @@ static bool ggml_graph_compute_helper(
                        int   n_threads,
                       bool   sched_reset = true) {
     for (int i = 0; i < ggml_backend_sched_get_n_backends(sched); ++i) {
+        printf("%d\n", i);
         ggml_backend_t backend = ggml_backend_sched_get_backend(sched, i);
         ggml_backend_dev_t dev = ggml_backend_get_device(backend);
         ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
@@ -202,7 +203,7 @@ static bool ggml_graph_compute_helper(
             fn_set_n_threads(backend, n_threads);
         }
     }
-
+    
     const bool t = (ggml_backend_sched_graph_compute(sched, graph) == GGML_STATUS_SUCCESS);
 
     if (!t || sched_reset) {
@@ -3209,20 +3210,21 @@ static bool log_mel_spectrogram(
     mel.data.resize(mel.n_mel * mel.n_len);
 
     {
-        std::vector<std::thread> workers(n_threads - 1);
-        for (int iw = 0; iw < n_threads - 1; ++iw) {
-            workers[iw] = std::thread(
-                    log_mel_spectrogram_worker_thread, iw + 1, hann, std::cref(samples_padded),
-                    n_samples + stage_2_pad, frame_size, frame_step, n_threads,
-                    std::cref(filters), std::ref(mel));
+        // std::vector<std::thread> workers(n_threads - 1);
+        for (int iw = 0; iw < n_threads; ++iw) {
+            // workers[iw] = std::thread(
+            //         log_mel_spectrogram_worker_thread, iw + 1, hann, std::cref(samples_padded),
+            //         n_samples + stage_2_pad, frame_size, frame_step, n_threads,
+            //         std::cref(filters), std::ref(mel));
+            log_mel_spectrogram_worker_thread(iw, hann, samples_padded, n_samples + stage_2_pad, frame_size, frame_step, n_threads, filters, mel);
         }
 
         // main thread
-        log_mel_spectrogram_worker_thread(0, hann, samples_padded, n_samples + stage_2_pad, frame_size, frame_step, n_threads, filters, mel);
+        // log_mel_spectrogram_worker_thread(0, hann, samples_padded, n_samples + stage_2_pad, frame_size, frame_step, n_threads, filters, mel);
 
-        for (int iw = 0; iw < n_threads - 1; ++iw) {
-            workers[iw].join();
-        }
+        // for (int iw = 0; iw < n_threads - 1; ++iw) {
+        //     workers[iw].join();
+        // }
     }
 
     // clamping and normalization
@@ -3621,49 +3623,49 @@ struct whisper_context_params whisper_context_default_params() {
     return result;
 }
 
-struct whisper_context * whisper_init_from_file_with_params_no_state(const char * path_model, struct whisper_context_params params) {
-    WHISPER_LOG_INFO("%s: loading model from '%s'\n", __func__, path_model);
-#ifdef _MSC_VER
-    // Convert UTF-8 path to wide string (UTF-16) for Windows, resolving character encoding issues.
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    std::wstring path_model_wide = converter.from_bytes(path_model);
-    auto fin = std::ifstream(path_model_wide, std::ios::binary);
-#else
-    auto fin = std::ifstream(path_model, std::ios::binary);
-#endif
-    if (!fin) {
-        WHISPER_LOG_ERROR("%s: failed to open '%s'\n", __func__, path_model);
-        return nullptr;
-    }
+// struct whisper_context * whisper_init_from_file_with_params_no_state(const char * path_model, struct whisper_context_params params) {
+//     WHISPER_LOG_INFO("%s: loading model from '%s'\n", __func__, path_model);
+// #ifdef _MSC_VER
+//     // Convert UTF-8 path to wide string (UTF-16) for Windows, resolving character encoding issues.
+//     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+//     std::wstring path_model_wide = converter.from_bytes(path_model);
+//     auto fin = std::ifstream(path_model_wide, std::ios::binary);
+// #else
+//     auto fin = std::ifstream(path_model, std::ios::binary);
+// #endif
+//     if (!fin) {
+//         WHISPER_LOG_ERROR("%s: failed to open '%s'\n", __func__, path_model);
+//         return nullptr;
+//     }
 
-    whisper_model_loader loader = {};
+//     whisper_model_loader loader = {};
 
-    loader.context = &fin;
+//     loader.context = &fin;
 
-    loader.read = [](void * ctx, void * output, size_t read_size) {
-        std::ifstream * fin = (std::ifstream*)ctx;
-        fin->read((char *)output, read_size);
-        return read_size;
-    };
+//     loader.read = [](void * ctx, void * output, size_t read_size) {
+//         std::ifstream * fin = (std::ifstream*)ctx;
+//         fin->read((char *)output, read_size);
+//         return read_size;
+//     };
 
-    loader.eof = [](void * ctx) {
-        std::ifstream * fin = (std::ifstream*)ctx;
-        return fin->eof();
-    };
+//     loader.eof = [](void * ctx) {
+//         std::ifstream * fin = (std::ifstream*)ctx;
+//         return fin->eof();
+//     };
 
-    loader.close = [](void * ctx) {
-        std::ifstream * fin = (std::ifstream*)ctx;
-        fin->close();
-    };
+//     loader.close = [](void * ctx) {
+//         std::ifstream * fin = (std::ifstream*)ctx;
+//         fin->close();
+//     };
 
-    auto ctx = whisper_init_with_params_no_state(&loader, params);
+//     auto ctx = whisper_init_with_params_no_state(&loader, params);
 
-    if (ctx) {
-        ctx->path_model = path_model;
-    }
+//     if (ctx) {
+//         ctx->path_model = path_model;
+//     }
 
-    return ctx;
-}
+//     return ctx;
+// }
 
 struct whisper_context * whisper_init_from_buffer_with_params_no_state(void * buffer, size_t buffer_size, struct whisper_context_params params) {
     struct buf_context {
@@ -5359,12 +5361,12 @@ struct whisper_vad_segments * whisper_vad_segments_from_probs(
     // Allocate final segments
     std::vector<whisper_vad_segment> segments;
     if (speeches.size() > 0) {
-        try {
+        // try {
             segments.resize(speeches.size());
-        } catch (const std::bad_alloc &) {
-            WHISPER_LOG_ERROR("%s: failed to allocate memory for final segments\n", __func__);
-            return nullptr;
-        }
+        // } catch (const std::bad_alloc &) {
+        //     WHISPER_LOG_ERROR("%s: failed to allocate memory for final segments\n", __func__);
+        //     return nullptr;
+        // }
     }
 
     // Apply padding to segments and copy to final segments
@@ -6675,13 +6677,13 @@ static bool whisper_vad(
         WHISPER_LOG_INFO("%s: total duration of speech segments: %.2f seconds\n",
                         __func__, (float)filtered_n_samples / WHISPER_SAMPLE_RATE);
 
-        try {
+        // try {
             filtered_samples.resize(total_samples_needed);
-        } catch (const std::bad_alloc & /* e */) {
-            WHISPER_LOG_ERROR("%s: failed to allocate memory for filtered samples\n", __func__);
-            whisper_vad_free_segments(vad_segments);
-            return false;
-        }
+        // } catch (const std::bad_alloc & /* e */) {
+        //     WHISPER_LOG_ERROR("%s: failed to allocate memory for filtered samples\n", __func__);
+        //     whisper_vad_free_segments(vad_segments);
+        //     return false;
+        // }
 
         int offset = 0;
         for (int i = 0; i < (int)vad_segments->data.size(); i++) {
@@ -7239,17 +7241,17 @@ int whisper_full_with_state(
                     if (n_threads == 1) {
                         process();
                     } else {
-                        std::vector<std::thread> threads(n_threads - 1);
+                        // std::vector<std::thread> threads(n_threads - 1);
 
-                        for (int t = 0; t < n_threads - 1; ++t) {
-                            threads[t] = std::thread(process);
-                        }
+                        // for (int t = 0; t < n_threads - 1; ++t) {
+                        //     threads[t] = std::thread(process);
+                        // }
 
-                        process();
+                        // process();
 
-                        for (int t = 0; t < n_threads - 1; ++t) {
-                            threads[t].join();
-                        }
+                        // for (int t = 0; t < n_threads - 1; ++t) {
+                        //     threads[t].join();
+                        // }
                     }
                 }
 
@@ -7489,17 +7491,17 @@ int whisper_full_with_state(
                         if (n_threads == 1) {
                             process();
                         } else {
-                            std::vector<std::thread> threads(n_threads - 1);
+                            // std::vector<std::thread> threads(n_threads - 1);
 
-                            for (int t = 0; t < n_threads - 1; ++t) {
-                                threads[t] = std::thread(process);
-                            }
+                            // for (int t = 0; t < n_threads - 1; ++t) {
+                            //     threads[t] = std::thread(process);
+                            // }
 
-                            process();
+                            // process();
 
-                            for (int t = 0; t < n_threads - 1; ++t) {
-                                threads[t].join();
-                            }
+                            // for (int t = 0; t < n_threads - 1; ++t) {
+                            //     threads[t].join();
+                            // }
                         }
                     }
 
@@ -7798,7 +7800,7 @@ int whisper_full_parallel(
     // the calling thread will process the first chunk
     // while the other threads will process the remaining chunks
 
-    std::vector<std::thread> workers(n_processors - 1);
+    // std::vector<std::thread> workers(n_processors - 1);
     for (int i = 0; i < n_processors - 1; ++i) {
         // create a new state for each thread
         states.push_back(whisper_init_state(ctx));
@@ -7818,7 +7820,8 @@ int whisper_full_parallel(
         params_cur.progress_callback = nullptr;
         params_cur.progress_callback_user_data = nullptr;
 
-        workers[i] = std::thread(whisper_full_with_state, ctx, states[i], std::move(params_cur), samples + start_samples, n_samples_cur);
+        // workers[i] = std::thread(whisper_full_with_state, ctx, states[i], std::move(params_cur), samples + start_samples, n_samples_cur);
+        whisper_full_with_state(ctx, states[i], std::move(params_cur), samples + start_samples, n_samples_cur);
     }
 
     {
@@ -7831,9 +7834,9 @@ int whisper_full_parallel(
         ret = whisper_full_with_state(ctx, ctx->state, std::move(params_cur), samples, offset_samples + n_samples_per_processor);
     }
 
-    for (int i = 0; i < n_processors - 1; ++i) {
-        workers[i].join();
-    }
+    // for (int i = 0; i < n_processors - 1; ++i) {
+    //     workers[i].join();
+    // }
 
     const int64_t offset_t = (int64_t) params.offset_ms/10.0;
 
@@ -8184,16 +8187,17 @@ WHISPER_API const char * whisper_bench_memcpy_str(int n_threads) {
 
         const int64_t t0 = ggml_time_us();
 
-        std::vector<std::thread> threads(k - 1);
-        for (int32_t th = 0; th < k - 1; ++th) {
-            threads[th] = std::thread(helper, th);
+        // std::vector<std::thread> threads(k - 1);
+        for (int32_t th = 0; th < k; ++th) {
+            // threads[th] = std::thread(helper, th);
+            helper(th);
         }
 
-        helper(k - 1);
+        // helper(k - 1);
 
-        for (int32_t th = 0; th < k - 1; ++th) {
-            threads[th].join();
-        }
+        // for (int32_t th = 0; th < k - 1; ++th) {
+        //     threads[th].join();
+        // }
 
         const int64_t t1 = ggml_time_us();
 
@@ -8969,7 +8973,7 @@ void whisper_log_set(ggml_log_callback log_callback, void * user_data) {
 }
 
 const char * whisper_version(void) {
-    return WHISPER_VERSION;
+    return "Some cursed custom version";
 }
 
 GGML_ATTRIBUTE_FORMAT(2, 3)

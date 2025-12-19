@@ -33,7 +33,7 @@ static void replace_all(std::string & s, const std::string & search, const std::
 
 // command-line parameters
 struct whisper_params {
-    int32_t n_threads     = std::min(4, (int32_t) std::thread::hardware_concurrency());
+    int32_t n_threads     = std::min(1, (int32_t) std::thread::hardware_concurrency());
     int32_t n_processors  = 1;
     int32_t offset_t_ms   = 0;
     int32_t offset_n      = 0;

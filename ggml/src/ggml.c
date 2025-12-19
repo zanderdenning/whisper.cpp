@@ -326,7 +326,9 @@ void * ggml_aligned_malloc(size_t size) {
             break;
     }
   #else
-    int result = posix_memalign(&aligned_memory, alignment, size);
+    // int result = posix_memalign(&aligned_memory, alignment, size);
+    aligned_memory = malloc(size);
+    int result = aligned_memory == NULL;
   #endif
     if (result != 0) {
         // Handle allocation failure
@@ -508,7 +510,7 @@ int64_t ggml_time_us(void) {
     QueryPerformanceCounter(&t);
     return ((t.QuadPart-timer_start) * 1000000) / timer_freq;
 }
-#else
+#elif !defined(BAREMETAL)
 void ggml_time_init(void) {}
 int64_t ggml_time_ms(void) {
     struct timespec ts;
@@ -521,7 +523,6 @@ int64_t ggml_time_us(void) {
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec*1000000 + (int64_t)ts.tv_nsec/1000;
 }
-#endif
 
 int64_t ggml_cycles(void) {
     return clock();
@@ -530,6 +531,7 @@ int64_t ggml_cycles(void) {
 int64_t ggml_cycles_per_ms(void) {
     return CLOCKS_PER_SEC/1000;
 }
+#endif
 
 //
 // cross-platform UTF-8 file paths

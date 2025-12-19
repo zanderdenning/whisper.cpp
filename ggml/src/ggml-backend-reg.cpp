@@ -1,6 +1,7 @@
 #include "ggml-backend-impl.h"
 #include "ggml-backend.h"
 #include "ggml-impl.h"
+#include "ggml-cpu.h"
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -20,7 +21,7 @@
 #    include <mach-o/dyld.h>
 #    include <dlfcn.h>
 #else
-#    include <dlfcn.h>
+// #    include <dlfcn.h>
 #    include <unistd.h>
 #endif
 
@@ -86,7 +87,7 @@ namespace fs = std::filesystem;
 
 static std::string path_str(const fs::path & path) {
     std::string u8path;
-    try {
+    // try {
 #if defined(__cpp_lib_char8_t)
         // C++20 and later: u8string() returns std::u8string
         std::u8string u8str = path.u8string();
@@ -95,10 +96,12 @@ static std::string path_str(const fs::path & path) {
         // C++17: u8string() returns std::string
         u8path = path.u8string();
 #endif
-    } catch (...) {
-    }
+    // } catch (...) {
+    // }
     return u8path;
 }
+
+#ifndef BAREMETAL
 
 #if defined(__clang__)
 #    pragma clang diagnostic pop
@@ -149,32 +152,37 @@ using dl_handle = void;
 
 struct dl_handle_deleter {
     void operator()(void * handle) {
-        dlclose(handle);
+        // dlclose(handle);
     }
 };
 
 static void * dl_load_library(const fs::path & path) {
-    dl_handle * handle = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
+    // dl_handle * handle = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
 
-    return handle;
+    // return handle;
+    return NULL;
 }
 
 static void * dl_get_sym(dl_handle * handle, const char * name) {
-    return dlsym(handle, name);
+    // return dlsym(handle, name);
+    return NULL;
 }
 
 static const char * dl_error() {
-    const char *rslt = dlerror();
-    return rslt != nullptr ? rslt : "";
+    // const char *rslt = dlerror();
+    // return rslt != nullptr ? rslt : "";
+    return "";
 }
 
 #endif
 
 using dl_handle_ptr = std::unique_ptr<dl_handle, dl_handle_deleter>;
 
+#endif // BAREMETAL
+
 struct ggml_backend_reg_entry {
     ggml_backend_reg_t reg;
-    dl_handle_ptr handle;
+    // dl_handle_ptr handle;
 };
 
 struct ggml_backend_registry {
@@ -223,14 +231,14 @@ struct ggml_backend_registry {
     ~ggml_backend_registry() {
         // FIXME: backends cannot be safely unloaded without a function to destroy all the backend resources,
         // since backend threads may still be running and accessing resources from the dynamic library
-        for (auto & entry : backends) {
-            if (entry.handle) {
-                entry.handle.release(); // NOLINT
-            }
-        }
+        // for (auto & entry : backends) {
+        //     if (entry.handle) {
+        //         entry.handle.release(); // NOLINT
+        //     }
+        // }
     }
 
-    void register_backend(ggml_backend_reg_t reg, dl_handle_ptr handle = nullptr) {
+    void register_backend(ggml_backend_reg_t reg/*, dl_handle_ptr handle = nullptr*/) {
         if (!reg) {
             return;
         }
@@ -239,7 +247,7 @@ struct ggml_backend_registry {
         GGML_LOG_DEBUG("%s: registered backend %s (%zu devices)\n",
             __func__, ggml_backend_reg_name(reg), ggml_backend_reg_dev_count(reg));
 #endif
-        backends.push_back({ reg, std::move(handle) });
+        backends.push_back({ reg/*, std::move(handle)*/ });
         for (size_t i = 0; i < ggml_backend_reg_dev_count(reg); i++) {
             register_device(ggml_backend_reg_dev_get(reg, i));
         }
@@ -253,31 +261,31 @@ struct ggml_backend_registry {
     }
 
     ggml_backend_reg_t load_backend(const fs::path & path, bool silent) {
-        dl_handle_ptr handle { dl_load_library(path) };
-        if (!handle) {
-            if (!silent) {
-                GGML_LOG_ERROR("%s: failed to load %s: %s\n", __func__, path_str(path).c_str(), dl_error());
-            }
-            return nullptr;
-        }
+        // dl_handle_ptr handle { dl_load_library(path) };
+        // if (!handle) {
+        //     if (!silent) {
+        //         GGML_LOG_ERROR("%s: failed to load %s: %s\n", __func__, path_str(path).c_str(), dl_error());
+        //     }
+        //     return nullptr;
+        // }
 
-        auto score_fn = (ggml_backend_score_t) dl_get_sym(handle.get(), "ggml_backend_score");
-        if (score_fn && score_fn() == 0) {
-            if (!silent) {
-                GGML_LOG_INFO("%s: backend %s is not supported on this system\n", __func__, path_str(path).c_str());
-            }
-            return nullptr;
-        }
+        // auto score_fn = (ggml_backend_score_t) dl_get_sym(handle.get(), "ggml_backend_score");
+        // if (score_fn && score_fn() == 0) {
+        //     if (!silent) {
+        //         GGML_LOG_INFO("%s: backend %s is not supported on this system\n", __func__, path_str(path).c_str());
+        //     }
+        //     return nullptr;
+        // }
 
-        auto backend_init_fn = (ggml_backend_init_t) dl_get_sym(handle.get(), "ggml_backend_init");
-        if (!backend_init_fn) {
-            if (!silent) {
-                GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s\n", __func__, path_str(path).c_str());
-            }
-            return nullptr;
-        }
+        // auto backend_init_fn = (ggml_backend_init_t) dl_get_sym(handle.get(), "ggml_backend_init");
+        // if (!backend_init_fn) {
+        //     if (!silent) {
+        //         GGML_LOG_ERROR("%s: failed to find ggml_backend_init in %s\n", __func__, path_str(path).c_str());
+        //     }
+        //     return nullptr;
+        // }
 
-        ggml_backend_reg_t reg = backend_init_fn();
+        ggml_backend_reg_t reg = ggml_backend_cpu_reg();
         if (!reg || reg->api_version != GGML_BACKEND_API_VERSION) {
             if (!silent) {
                 if (!reg) {
@@ -293,7 +301,7 @@ struct ggml_backend_registry {
 
         GGML_LOG_INFO("%s: loaded %s backend from %s\n", __func__, ggml_backend_reg_name(reg), path_str(path).c_str());
 
-        register_backend(reg, std::move(handle));
+        register_backend(reg/*, std::move(handle)*/);
 
         return reg;
     }
@@ -432,6 +440,8 @@ ggml_backend_reg_t ggml_backend_load(const char * path) {
 void ggml_backend_unload(ggml_backend_reg_t reg) {
     get_reg().unload_backend(reg, true);
 }
+
+#ifndef BAREMETAL
 
 static fs::path get_executable_path() {
 #if defined(__APPLE__)
@@ -614,3 +624,5 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
         ggml_backend_load(backend_path);
     }
 }
+
+#endif // BAREMETAL

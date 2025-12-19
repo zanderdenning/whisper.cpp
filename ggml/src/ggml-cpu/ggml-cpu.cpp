@@ -356,8 +356,8 @@ static void ggml_backend_cpu_device_get_memory(ggml_backend_dev_t dev, size_t * 
     *total = status.ullTotalPhys;
     *free = status.ullAvailPhys;
 #else
-    long pages = sysconf(_SC_PHYS_PAGES);
-    long page_size = sysconf(_SC_PAGE_SIZE);
+    long pages = 4096; // sysconf(_SC_PHYS_PAGES); // TODO: UPDATE THIS
+    long page_size = 4096; // sysconf(_SC_PAGE_SIZE);
     *total = pages * page_size;
 
     // "free" system memory is ill-defined, for practical purposes assume that all of it is free:
